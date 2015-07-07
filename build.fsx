@@ -327,9 +327,9 @@ Target "All" DoNothing
   ==> "AssemblyInfo"
   ==> "Build"
   ==> "CopyBinaries"
-  ==> "RunTests"
-  ==> "GenerateReferenceDocs"
-  ==> "GenerateDocs"
+  // ==> "RunTests"
+  // ==> "GenerateReferenceDocs"
+  // ==> "GenerateDocs"
   ==> "All"
   =?> ("ReleaseDocs",isLocalBuild)
 
@@ -352,11 +352,11 @@ Target "All" DoNothing
 "GenerateHelp"
   ==> "KeepRunning"
     
-"ReleaseDocs"
-  ==> "Release"
+// "ReleaseDocs"
+//   ==> "Release"
 
-"BuildPackage"
-  ==> "PublishNuget"
-  ==> "Release"
+//"BuildPackage"
+//  ==> "PublishNuget"
+"CopyBinaries"  ==> "Release"
 
 RunTargetOrDefault "All"
