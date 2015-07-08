@@ -350,11 +350,20 @@ Target "Release" (fun _ ->
     let draft = github.Release.Create(gitOwner, gitName, data)
                 |> Async.AwaitTask
                 |> Async.RunSynchronously
+
+    let fi = FileInfo("build.fsx")
+    let archiveContents = File.OpenRead(fi.FullName)
+    let assetUpload = new ReleaseAssetUpload(fi.Name,"application/octet-stream",archiveContents,Nullable<TimeSpan>())
+    let asset = github.Release.UploadAsset(draft, assetUpload)
+                |> Async.AwaitTask
+                |> Async.RunSynchronously
+    printfn "Uploaded %s" asset.Name
+    
     let update = draft.ToUpdate()
     update.Draft <- Nullable<bool>(false)
     let released = github.Release.Edit(gitOwner, gitName, draft.Id, update)
-                |> Async.AwaitTask
-                |> Async.RunSynchronously
+                   |> Async.AwaitTask
+                   |> Async.RunSynchronously
     printfn "Released %d on github" released.Id
 
                 
