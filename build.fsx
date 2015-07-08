@@ -421,13 +421,11 @@ Target "Release" (fun _ ->
 
     // release on github
     printfn "Creating client"
-    let client = createClient user pw
-    let draft = createDraft gitOwner gitName release.NugetVersion (release.SemVer.PreRelease <> None) release.Notes client
-    // TODO: |> uploadFile "PATH_TO_FILE"    
-    //|> releaseDraft
-    printfn "Uploading draft: %A" draft
-    let createdDraft = Async.RunSynchronously draft
-    ()
+    createClient user pw
+    |> createDraft gitOwner gitName release.NugetVersion (release.SemVer.PreRelease <> None) release.Notes
+    |> uploadFile "build.fsx"    
+    |> releaseDraft
+    |> Async.RunSynchronously
            
 )
 
