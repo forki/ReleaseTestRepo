@@ -1,3 +1,8 @@
+### 1.2 - Unreleased
+
+* Made another change
+* another note
+
 ### 1.1 - Unreleased
 
 *Made a change
