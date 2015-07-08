@@ -1,3 +1,7 @@
+### 1.1 - Unreleased
+
+*Made a change
+
 ### 1.0 - Unreleased
 * More awesome stuff coming
 * Added SourceLink for Source Indexing PDB

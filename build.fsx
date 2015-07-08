@@ -300,20 +300,75 @@ Target "ReleaseDocs" (fun _ ->
 #load "paket-files/fsharp/FAKE/modules/Octokit/Octokit.fsx"
 open Octokit
 
+let readPw () : string =
+  let rec loop cs =
+    let key = Console.ReadKey(true)
+    match key.Key with
+    | ConsoleKey.Backspace -> match cs with
+                              | [] -> loop []
+                              | _::cs -> loop cs
+    | ConsoleKey.Enter -> cs
+    | _ -> loop (key.KeyChar :: cs)
+
+  loop []
+  |> List.rev
+  |> Array.ofList
+  |> fun cs -> new String(cs)
+
 Target "Release" (fun _ ->
+    let user = getBuildParamOrDefault "github-user" "rneatherway"
+    let pw = getBuildParamOrDefault "github-pw" ""
+    let user =
+      if user = "" then
+        printf "Username: "
+        Console.ReadLine()
+      else
+        user
+    let pw =
+      if pw = "" then
+        printf "Password: "
+        let pw = readPw()
+        printfn ""
+        pw
+      else
+        pw
     StageAll ""
     Git.Commit.Commit "" (sprintf "Bump version to %s" release.NugetVersion)
     Branches.push ""
 
     Branches.tag "" release.NugetVersion
     Branches.pushTag "" "origin" release.NugetVersion
+
+
+    let github = new GitHubClient(new ProductHeaderValue("FAKE"))
+    github.Credentials <- Credentials(user, pw)
+    let data = new NewRelease(release.NugetVersion)
+    data.Name <- release.NugetVersion
+    data.Body <- String.Join(Environment.NewLine, release.Notes)
+    data.Draft <- true
+    data.Prerelease <- release.SemVer.PreRelease <> None
+    let draft = github.Release.Create(gitOwner, gitName, data)
+                |> Async.AwaitTask
+                |> Async.RunSynchronously
+    let update = draft.ToUpdate()
+    update.Draft <- Nullable<bool>(false)
+    let released = github.Release.Edit(gitOwner, gitName, draft.Id, update)
+                |> Async.AwaitTask
+                |> Async.RunSynchronously
+    printfn "Released %d on github" released.Id
+
+                
     
-    // release on github
-    createClient (getBuildParamOrDefault "github-user" "") (getBuildParamOrDefault "github-pw" "")
-    |> createDraft gitOwner gitName release.NugetVersion (release.SemVer.PreRelease <> None) release.Notes 
-    // TODO: |> uploadFile "PATH_TO_FILE"    
-    |> releaseDraft
-    |> Async.RunSynchronously
+    // // release on github
+    // printfn "Creating client"
+    // let client = createClient (getBuildParamOrDefault "github-user" "") (getBuildParamOrDefault "github-pw" "")
+    // let draft = createDraft gitOwner gitName release.NugetVersion (release.SemVer.PreRelease <> None) release.Notes client
+    // // TODO: |> uploadFile "PATH_TO_FILE"    
+    // //|> releaseDraft
+    // printfn "Uploading draft: %A" draft
+    // let createdDraft = Async.RunSynchronously draft
+    // ()
+           
 )
 
 Target "BuildPackage" DoNothing
@@ -357,6 +412,6 @@ Target "All" DoNothing
 
 //"BuildPackage"
 //  ==> "PublishNuget"
-"CopyBinaries"  ==> "Release"
+
 
 RunTargetOrDefault "All"
