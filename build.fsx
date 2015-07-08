@@ -297,12 +297,101 @@ Target "ReleaseDocs" (fun _ ->
     Branches.push tempDocsDir
 )
 
-#load "paket-files/fsharp/FAKE/modules/Octokit/Octokit.fsx"
+#r @"packages/Octokit/lib/net45/Octokit.dll"
 open Octokit
 
-let readPw () : string =
+// let createDraft user pw version prerelease =
+//   let github = new GitHubClient(new ProductHeaderValue("FAKE"))
+//   github.Credentials <- Credentials(user, pw)
+//   let data = new NewRelease(version)
+//   data.Name <- version
+//   data.Body <- String.Join(Environment.NewLine, release.Notes)
+//   data.Draft <- true
+//   data.Prerelease <- prerelease
+//   let draft = github.Release.Create(gitOwner, gitName, data)
+//               |> Async.AwaitTask
+//               |> Async.RunSynchronously
+//   draft
+
+// let uploadFileToDraft client
+//   let fi = FileInfo("build.fsx")
+//   let archiveContents = File.OpenRead(fi.FullName)
+//   let assetUpload = new ReleaseAssetUpload(fi.Name,"application/octet-stream",archiveContents,Nullable<TimeSpan>())
+//   let asset = github.Release.UploadAsset(draft, assetUpload)
+//               |> Async.AwaitTask
+//               |> Async.RunSynchronously
+//   printfn "Uploaded %s" asset.Name
+    
+    // let update = draft.ToUpdate()
+    // update.Draft <- Nullable<bool>(false)
+    // let released = github.Release.Edit(gitOwner, gitName, draft.Id, update)
+    //                |> Async.AwaitTask
+    //                |> Async.RunSynchronously
+    // printfn "Released %d on github" released.Id
+
+type Draft = 
+    { Client : GitHubClient
+      Owner : string
+      Project : string
+      DraftRelease : Release }
+
+let rec private retry count asyncF = 
+    async { 
+        try 
+            return! asyncF
+        with _ when count > 0 -> return! retry (count - 1) asyncF
+    }
+
+
+let createClient user password = 
+    async { 
+        let github = new GitHubClient(new ProductHeaderValue("FAKE"))
+        github.Credentials <- Credentials(user, password)
+        return github
+    }
+
+let createDraft owner project version prerelease (notes: string seq) (client : Async<GitHubClient>) =     
+    async {
+        printfn "createDraft"
+        let data = new NewRelease(version)
+        data.Name <- version
+        data.Body <- String.Join(Environment.NewLine, notes)
+        data.Draft <- true
+        data.Prerelease <- prerelease
+        let! client' = client
+        let! draft = Async.AwaitTask <| client'.Release.Create(owner, project, data)
+        printfn "Created draft release id %d" draft.Id
+        return { Client = client'
+                 Owner = owner
+                 Project = project
+                 DraftRelease = draft }
+    } |> retry 5
+
+let uploadFile fileName (draft : Async<Draft>) = 
+    async { 
+        let fi = FileInfo(fileName)
+        let archiveContents = File.OpenRead(fi.FullName)
+        let assetUpload = new ReleaseAssetUpload(fi.Name,"application/octet-stream",archiveContents,Nullable<TimeSpan>())
+        let! draft' = draft
+        let! asset = Async.AwaitTask <| draft'.Client.Release.UploadAsset(draft'.DraftRelease, assetUpload)
+        printfn "Uploaded %s" asset.Name
+        return draft'
+    } |> retry 5
+
+let releaseDraft (draft : Async<Draft>) = 
+    async {
+        printfn "releaseDraft"
+        let! draft' = draft
+        let update = draft'.DraftRelease.ToUpdate()
+        update.Draft <- Nullable<bool>(false)
+        let! released = Async.AwaitTask <| draft'.Client.Release.Edit(draft'.Owner, draft'.Project, draft'.DraftRelease.Id, update)
+        printfn "Released %d on github" released.Id
+    } |> retry 5
+
+
+let readString prompt echo : string =
   let rec loop cs =
-    let key = Console.ReadKey(true)
+    let key = Console.ReadKey(not echo)
     match key.Key with
     | ConsoleKey.Backspace -> match cs with
                               | [] -> loop []
@@ -310,28 +399,18 @@ let readPw () : string =
     | ConsoleKey.Enter -> cs
     | _ -> loop (key.KeyChar :: cs)
 
-  loop []
-  |> List.rev
-  |> Array.ofList
-  |> fun cs -> new String(cs)
+  printf "%s" prompt
+  let input =
+    loop []
+    |> List.rev
+    |> Array.ofList
+    |> fun cs -> new String(cs)
+  printfn ""
+  input
 
 Target "Release" (fun _ ->
-    let user = getBuildParamOrDefault "github-user" "rneatherway"
-    let pw = getBuildParamOrDefault "github-pw" ""
-    let user =
-      if user = "" then
-        printf "Username: "
-        Console.ReadLine()
-      else
-        user
-    let pw =
-      if pw = "" then
-        printf "Password: "
-        let pw = readPw()
-        printfn ""
-        pw
-      else
-        pw
+    let user = readString "Username: " true
+    let pw = readString "Password: " false
     StageAll ""
     Git.Commit.Commit "" (sprintf "Bump version to %s" release.NugetVersion)
     Branches.push ""
@@ -339,44 +418,17 @@ Target "Release" (fun _ ->
     Branches.tag "" release.NugetVersion
     Branches.pushTag "" "origin" release.NugetVersion
 
+    //let draft = createDraft user pw release.NugetVersion (release.SemVer.PreRelease <> None)
 
-    let github = new GitHubClient(new ProductHeaderValue("FAKE"))
-    github.Credentials <- Credentials(user, pw)
-    let data = new NewRelease(release.NugetVersion)
-    data.Name <- release.NugetVersion
-    data.Body <- String.Join(Environment.NewLine, release.Notes)
-    data.Draft <- true
-    data.Prerelease <- release.SemVer.PreRelease <> None
-    let draft = github.Release.Create(gitOwner, gitName, data)
-                |> Async.AwaitTask
-                |> Async.RunSynchronously
-
-    let fi = FileInfo("build.fsx")
-    let archiveContents = File.OpenRead(fi.FullName)
-    let assetUpload = new ReleaseAssetUpload(fi.Name,"application/octet-stream",archiveContents,Nullable<TimeSpan>())
-    let asset = github.Release.UploadAsset(draft, assetUpload)
-                |> Async.AwaitTask
-                |> Async.RunSynchronously
-    printfn "Uploaded %s" asset.Name
-    
-    let update = draft.ToUpdate()
-    update.Draft <- Nullable<bool>(false)
-    let released = github.Release.Edit(gitOwner, gitName, draft.Id, update)
-                   |> Async.AwaitTask
-                   |> Async.RunSynchronously
-    printfn "Released %d on github" released.Id
-
-                
-    
-    // // release on github
-    // printfn "Creating client"
-    // let client = createClient (getBuildParamOrDefault "github-user" "") (getBuildParamOrDefault "github-pw" "")
-    // let draft = createDraft gitOwner gitName release.NugetVersion (release.SemVer.PreRelease <> None) release.Notes client
-    // // TODO: |> uploadFile "PATH_TO_FILE"    
-    // //|> releaseDraft
-    // printfn "Uploading draft: %A" draft
-    // let createdDraft = Async.RunSynchronously draft
-    // ()
+    // release on github
+    printfn "Creating client"
+    let client = createClient (getBuildParamOrDefault "github-user" "") (getBuildParamOrDefault "github-pw" "")
+    let draft = createDraft gitOwner gitName release.NugetVersion (release.SemVer.PreRelease <> None) release.Notes client
+    // TODO: |> uploadFile "PATH_TO_FILE"    
+    //|> releaseDraft
+    printfn "Uploading draft: %A" draft
+    let createdDraft = Async.RunSynchronously draft
+    ()
            
 )
 
