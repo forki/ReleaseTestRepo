@@ -405,7 +405,8 @@ let readString prompt echo : string =
     |> List.rev
     |> Array.ofList
     |> fun cs -> new String(cs)
-  printfn ""
+  if not echo then
+    printfn ""
   input
 
 Target "Release" (fun _ ->
