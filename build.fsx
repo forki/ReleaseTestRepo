@@ -344,13 +344,11 @@ let rec private retry count asyncF =
 
 
 let createClient user password = 
-    async { 
-        let github = new GitHubClient(new ProductHeaderValue("FAKE"))
-        github.Credentials <- Credentials(user, password)
-        return github
-    }
-
-let createDraft owner project version prerelease (notes: string seq) (client : Async<GitHubClient>) =     
+    let github = new GitHubClient(new ProductHeaderValue("FAKE"))
+    github.Credentials <- Credentials(user, password)
+    github
+        
+let createDraft owner project version prerelease (notes: string seq) (client : GitHubClient) =     
     async {
         printfn "createDraft"
         let data = new NewRelease(version)
@@ -358,7 +356,7 @@ let createDraft owner project version prerelease (notes: string seq) (client : A
         data.Body <- String.Join(Environment.NewLine, notes)
         data.Draft <- true
         data.Prerelease <- prerelease
-        let! client' = client
+        let client' = client
         let! draft = Async.AwaitTask <| client'.Release.Create(owner, project, data)
         printfn "Created draft release id %d" draft.Id
         return { Client = client'
@@ -423,7 +421,7 @@ Target "Release" (fun _ ->
 
     // release on github
     printfn "Creating client"
-    let client = createClient (getBuildParamOrDefault "github-user" "") (getBuildParamOrDefault "github-pw" "")
+    let client = createClient user pw
     let draft = createDraft gitOwner gitName release.NugetVersion (release.SemVer.PreRelease <> None) release.Notes client
     // TODO: |> uploadFile "PATH_TO_FILE"    
     //|> releaseDraft
