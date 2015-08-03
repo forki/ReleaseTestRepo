@@ -18,12 +18,16 @@ type Draft =
 let private isRunningOnMono = System.Type.GetType ("Mono.Runtime") <> null
 
 let rec private retry count (asyncF: Async<'a>) : Async<'a> =
-    async {
-      let! r = Async.Catch asyncF
-      match r with
-      | Choice2Of2 e -> return! retry (count - 1) asyncF
-      | Choice1Of2 r -> return r
-    }
+    try
+      async { return! asyncF
+        }
+    with _ -> retry (count - 1) asyncF
+    // async {
+    //   let! r = Async.Catch asyncF
+    //   match r with
+    //   | Choice2Of2 e -> return! retry (count - 1) asyncF
+    //   | Choice1Of2 r -> return r
+    // }
 
 
 let createClient user password = 
