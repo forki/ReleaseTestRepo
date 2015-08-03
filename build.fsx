@@ -325,7 +325,7 @@ Target "Release" (fun _ ->
       Git.CommandHelper.getGitResult "" "remote -v"
       |> Seq.filter (fun (s: string) -> s.EndsWith("(push)"))
       |> Seq.tryFind (fun (s: string) -> s.Contains(gitOwner + "/" + gitName))
-      |> function None -> gitHome | Some (s: string) -> s.Split().[0]
+      |> function None -> gitHome + "/" + gitName | Some (s: string) -> s.Split().[0]
 
     printfn "Remote: %s" remote
                   
