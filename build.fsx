@@ -320,17 +320,15 @@ let readString prompt echo : string =
     printfn ""
   input
 
-let remotef () =
-  let remote =
-    Git.CommandHelper.getGitResult "" "remote -v"
-    |> Seq.filter (fun (s: string) -> s.EndsWith("(push)"))
-    |> Seq.tryFind (fun (s: string) -> s.Contains(gitOwner + "/" + gitName))
-    |> function None -> "origin" | Some (s: string) -> s.Split().[0]
-  tracefn "%A" remote
-
-Target "Remote" remotef
-
 Target "Release" (fun _ ->
+    let remote =
+      Git.CommandHelper.getGitResult "" "remote -v"
+      |> Seq.filter (fun (s: string) -> s.EndsWith("(push)"))
+      |> Seq.tryFind (fun (s: string) -> s.Contains(gitOwner + "/" + gitName))
+      |> function None -> gitHome | Some (s: string) -> s.Split().[0]
+
+    printfn "Remote: %s" remote
+                  
     let user = readString "Username: " true
     let pw = readString "Password: " false
     StageAll ""
@@ -338,7 +336,7 @@ Target "Release" (fun _ ->
     Branches.push ""
 
     Branches.tag "" release.NugetVersion
-    Branches.pushTag "" "origin" release.NugetVersion
+    Branches.pushTag "" remote release.NugetVersion
 
     //let draft = createDraft user pw release.NugetVersion (release.SemVer.PreRelease <> None)
 
