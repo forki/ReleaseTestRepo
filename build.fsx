@@ -332,8 +332,8 @@ Target "Release" (fun _ ->
     let user = readString "Username: " true
     let pw = readString "Password: " false
     StageAll ""
-    Git.Commit.Commit "" (sprintf "Bump version to %s" release.NugetVersion)
-    Branches.push ""
+    Commit.Commit "" (sprintf "Bump version to %s" release.NugetVersion)
+    Branches.pushBranch "" remote (Information.getBranchName "") 
 
     Branches.tag "" release.NugetVersion
     Branches.pushTag "" remote release.NugetVersion
