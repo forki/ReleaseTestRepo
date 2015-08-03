@@ -18,6 +18,9 @@ type Draft =
 let private isRunningOnMono = System.Type.GetType ("Mono.Runtime") <> null
 
 let rec private retry count (asyncF: Async<'a>) : Async<'a> =
+    if isRunningOnMono then
+      asyncF
+    else
     try
       async { return! asyncF
         }
