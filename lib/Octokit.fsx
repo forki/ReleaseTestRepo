@@ -17,12 +17,12 @@ type Draft =
 
 let private isRunningOnMono = System.Type.GetType ("Mono.Runtime") <> null
 
-let rec private retry count asyncF =
+let rec private retry count (asyncF: Async<'a>) : Async<'a> =
     async {
-        try
-            let! result = Async.StartChild asyncF
-            return! result
-        with _ when count > 0 -> return! retry (count - 1) asyncF 
+      let! r = Async.Catch asyncF
+      match r with
+      | Choice2Of2 e -> return! retry (count - 1) asyncF
+      | Choice1Of2 r -> return r
     }
 
 
